@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Raisin Type -->
+        <record id="view_form_raisin_type" model="ir.ui.view">
+            <field name="name">raisin.type.form</field>
+            <field name="model">raisin.type</field>
+            <field name="arch" type="xml">
+                <form string="Raisin Type">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </sheet>
+
+                <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_tree_raisin_type" model="ir.ui.view">
+            <field name="name">raisin.type.tree</field>
+            <field name="model">raisin.type</field>
+            <field name="arch" type="xml">
+                <list string="Raisin Types">
+                    <field name="name"/>
+                </list>
+            </field>
+        </record>
+        <record id="action_raisin_type" model="ir.actions.act_window">
+            <field name="name">Raisin Types</field>
+            <field name="res_model">raisin.type</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first Raisin Type
+                </p>
+            </field>
+        </record>
+
+
+        <menuitem 
+            id="menu_raisin_type_root" 
+            name="Raisin Type"
+            parent="crm.crm_menu_config"
+            action="action_raisin_type"
+            sequence="20"
+        />
+
+        <!-- Profile Name -->
+        <record id="view_form_profile_name" model="ir.ui.view">
+            <field name="name">profile.name.form</field>
+            <field name="model">profile.name</field>
+            <field name="arch" type="xml">
+                <form string="Profile Name">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="width"/>
+                        </group>
+                    </sheet>
+
+                <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_tree_profile_name" model="ir.ui.view">
+            <field name="name">profile.name.tree</field>
+            <field name="model">profile.name</field>
+            <field name="arch" type="xml">
+                <list string="Profile Name">
+                    <field name="name"/>
+                    <field name="width"/>
+                </list>
+            </field>
+        </record>
+        <record id="action_profile_name" model="ir.actions.act_window">
+            <field name="name">Raisin Types</field>
+            <field name="res_model">profile.name</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first Profile Name
+                </p>
+            </field>
+        </record>
+
+
+        <menuitem 
+            id="menu_profile_name_root" 
+            name="Profile Name"
+            parent="crm.crm_menu_config"
+            action="action_profile_name"
+            sequence="30"
+        />
+
+        <!-- Gel-coat-->
+        <record id="view_form_gel_coat" model="ir.ui.view">
+            <field name="name">gel.coat.form</field>
+            <field name="model">gel.coat</field>
+            <field name="arch" type="xml">
+                <form string="Gel-coat">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </sheet>
+
+                <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_tree_gel_coat" model="ir.ui.view">
+            <field name="name">gel.coat.tree</field>
+            <field name="model">gel.coat</field>
+            <field name="arch" type="xml">
+                <list string="Gel-coat">
+                    <field name="name"/>
+                </list>
+            </field>
+        </record>
+        <record id="action_gel_coat" model="ir.actions.act_window">
+            <field name="name">Gel-coat</field>
+            <field name="res_model">gel.coat</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first Gel Coat
+                </p>
+            </field>
+        </record>
+
+
+        <menuitem 
+            id="menu_gel_coat_root" 
+            name="Gel Coat"
+            parent="crm.crm_menu_config"
+            action="action_gel_coat"
+            sequence="40"
+        />
+        <record id="view_res_config_settings_enable_reminder" model="ir.ui.view">
+            <field name="name">res.config.settings.enable.reminder</field>
+            <field name="model">res.config.settings</field>
+            <field name="inherit_id" ref="mrp.res_config_settings_view_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Add a new block under MRP settings -->
+                <xpath expr="//app[@name='mrp']" position="inside">
+
+                    <block title="Reminder Settings">
+                        <setting id="enable_reminder_setting" string="Reminder Email">
+                            <field name="enable_reminder"/>
+                        </setting>
+
+                        <setting invisible="not enable_reminder">
+                            <field name="reminder_days" class="oe_inline"/>
+                        </setting>
+                    </block>
+
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_crm_material_line_user,access_crm_material_line_user,model_crm_material_line,base.group_user,1,1,1,1
+crm_customisation.access_raisin_type,access_raisin_type,crm_customisation.model_raisin_type,base.group_user,1,1,1,1
+crm_customisation.access_profile_name,access_profile_name,crm_customisation.model_profile_name,base.group_user,1,1,1,1
+crm_customisation.access_gel_coat,access_gel_coat,crm_customisation.model_gel_coat,base.group_user,1,1,1,1
+
+

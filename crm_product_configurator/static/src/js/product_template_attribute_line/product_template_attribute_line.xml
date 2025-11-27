@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <!-- Product attributes line template -->
+    <t t-name="crmProductConfigurator.ptal">
+        <div name="ptal" t-attf-class="#{this.props.attribute_values.length === 1 &amp;&amp; hasPTAVCustom() ? 'd-flex' : ''}">
+        <!-- If the attribute line contains only one attribute value, we don't show the attribute
+             value template or the attribute line title unless the single attribute value is custom,
+             whereas in this case, only the title of the attribute line and the custom value
+             template are rendered. -->
+            <div class="d-flex flex-column flex-lg-row gap-2 mb-2">
+
+                <!-- LABEL -->
+                <label t-if="this.props.attribute_values.length >= 1"
+                    t-out="this.props.attribute.name"
+                    class="fw-bold text-break w-lg-25"/>
+                    
+                <!-- CASE 1: FILE UPLOAD ALWAYS SHOW INPUT -->
+                <t t-if="this.props.attribute.display_type === 'file_upload'">
+                    <t t-call="crmProductConfigurator.ptav-file-upload"/>
+                </t>
+                <!-- CASE: M2O SELECTOR ALWAYS SHOW DROPDOWN -->
+                <t t-elif="this.props.attribute.display_type === 'm2o'">
+                    <t t-call="crmProductConfigurator.ptav-m2o"/>
+                </t>
+
+                <!-- CASE 2: MULTIPLE VALUES → show radio/select UI -->
+                <t t-elif="this.props.attribute_values.length > 1">
+                    <t t-call="{{getPTAVTemplate()}}"/>
+                </t>
+
+                <!-- CASE 3: SINGLE VALUE → CUSTOM TYPE → SHOW TEXT INPUT -->
+                <t t-elif="isSelectedPTAVCustom()">
+                    <input class="o_input w-75 mb-4 ms-lg-auto"
+                        type="text"
+                        placeholder="Enter a customized value"
+                        t-att-value="this.props.customValue or ''"
+                        t-on-change="updateCustomValue"/>
+                </t>
+                
+
+                <!-- CASE 4: SINGLE VALUE NORMAL FIXED VALUE → show name -->
+                <t t-else="">
+                    <span><t t-out="this.props.attribute_values[0].name"/></span>
+                </t>
+
+            </div>
+            <!-- <input
+                class="o_input w-75 mb-4 ms-lg-auto"
+                type="text"
+                placeholder="Enter a customized value"
+                t-if="hasPTAVCustom &amp;&amp; isSelectedPTAVCustom()"
+                t-att-value="this.props.customValue"
+                t-on-change="updateCustomValue"
+            /> -->
+        </div>
+    </t>
+    <!-- Attributes value templates -->
+    <t t-name="crmProductConfigurator.ptav-select">
+        <select class="o_input w-50 flex-grow-1"
+            t-on-change="updateSelectedPTAV"
+            t-att-name="'ptal-' + this.props.id">
+            <option
+                t-foreach="this.props.attribute_values"
+                t-as="ptav"
+                t-key="ptav.id"
+                t-att-value="ptav.id"
+                t-att-selected="this.props.selected_attribute_value_ids.includes(ptav.id)"
+                t-out="getPTAVSelectName(ptav)"
+                t-att-class="{ 'css_not_available': ptav.excluded }"/>
+        </select>
+    </t>
+    <t t-name="crmProductConfigurator.ptav-radio">
+        <ul class="list-unstyled flex-grow-1 m-0">
+            <li t-foreach="this.props.attribute_values" t-as="ptav" t-key="ptav.id"
+                class="mb-2">
+                <div class="form-check">
+                    <label
+                        class="form-check-label d-inline-flex align-items-center"
+                        t-att-class="{ 'css_not_available': ptav.excluded }"
+                        t-att-for="ptav.id">
+                        <span t-out="ptav.name"/>
+                    </label>
+                    <input
+                        type="radio"
+                        class="form-check-input"
+                        t-att-id="ptav.id"
+                        t-att-value="ptav.id"
+                        t-att-checked="this.props.selected_attribute_value_ids.includes(ptav.id)"
+                        t-att-name="'ptal-' + this.props.id"
+                        t-on-change="updateSelectedPTAV"/>
+                </div>
+            </li>
+        </ul>
+    </t>
+    <t t-name="crmProductConfigurator.ptav-pills">
+         <ul class="list-inline list-unstyled flex-grow-1 mb-0">
+            <li t-foreach="this.props.attribute_values" t-as="ptav" t-key="ptav.id"
+                t-att-class="{'active': this.props.selected_attribute_value_ids.includes(ptav.id)}"
+                class="o_crm_product_configurator_ptav_pills list-inline-item">
+                <label
+                    class="btn btn-outline-secondary"
+                    t-att-class="{ 'css_not_available': ptav.excluded }"
+                    t-att-for="ptav.id">
+                    <span t-out="ptav.name"/>
+                </label>
+                <input
+                    class="btn-check"
+                    type="radio"
+                    t-att-id="ptav.id"
+                    t-att-value="ptav.id"
+                    t-att-name="'ptal-' + this.props.id"
+                    t-att-checked="this.props.selected_attribute_value_ids.includes(ptav.id)"
+                    t-on-change="updateSelectedPTAV"/>
+            </li>
+        </ul>
+    </t>
+    <t t-name="crmProductConfigurator.ptav-color">
+        <ul class="list-inline flex-grow-1 mb-0">
+            <li t-foreach="this.props.attribute_values" t-as="ptav" t-key="ptav.id"
+                class="list-inline-item me-2">
+                <t t-set="img_style" t-value="ptav.image ? 'background:url(/web/image/product.template.attribute.value/'+ptav.id+'/image); background-size:cover;' : ''"/>
+                <t t-set="color_style" t-value="ptav.is_custom ? '' : 'background-color:' + ptav.html_color"/>
+                <label
+                    class="position-relative d-inline-block rounded-pill text-center"
+                    t-att-title="ptav.name"
+                    t-attf-style="#{img_style or color_style}"
+                    t-att-class="{'o_crm_product_configurator_ptav_color': true,
+                                  'active': this.props.selected_attribute_value_ids.includes(ptav.id),
+                                  'custom_value': ptav.is_custom,
+                                  'transparent': !ptav.is_custom and !ptav.html_color,
+                                  'css_not_available': ptav.excluded }">
+                    <input
+                        type="radio"
+                        t-att-id="ptav.id"
+                        t-att-value="ptav.id"
+                        t-att-name="'ptal-' + this.props.id"
+                        t-att-checked="this.props.selected_attribute_value_ids.includes(ptav.id)"
+                        t-on-change="updateSelectedPTAV"/>
+                </label>
+            </li>
+        </ul>
+    </t>
+    <t t-name="crmProductConfigurator.ptav-multi">
+         <ul class="list-unstyled flex-grow-1 m-0">
+            <li t-foreach="this.props.attribute_values" t-as="ptav" t-key="ptav.id"
+                class="mb-2">
+                <div class="form-check">
+                    <input
+                        type="checkbox"
+                        class="form-check-input"
+                        t-att-id="ptav.id"
+                        t-att-value="ptav.id"
+                        t-att-name="'ptal-' + this.props.id"
+                        t-att-checked="this.props.selected_attribute_value_ids.includes(ptav.id)"
+                        t-on-change="updateSelectedPTAV"/>
+                    <label
+                        class="form-check-label"
+                        t-att-for="ptav.id">
+                        <span t-out="ptav.name"/>
+                    </label>
+                </div>
+            </li>
+        </ul>
+    </t>
+    <t t-name="crmProductConfigurator.ptav-file-upload">
+        <div class="d-flex align-items-center gap-3 w-100">
+
+            <!-- ATTACH BUTTON (only before upload) -->
+            <label t-if="!getFileName()"
+                class="btn btn-primary d-flex align-items-center justify-content-center mb-0"
+                style="padding: 4px 20px; height: 32px; min-width: 160px; font-size: 14px;">
+                <i class="fa fa-paperclip me-1"/> Attach File
+                <input type="file" class="d-none"
+                    t-on-change="uploadFile"
+                    accept=".pdf,.png,.jpg,.jpeg,.svg,.doc,.docx,.xls,.xlsx,.dwg,.dxf"/>
+            </label>
+
+            <!-- FILE NAME + ACTION ICONS (only after upload) -->
+            <div t-if="getFileName()" class="d-flex align-items-center gap-3">
+
+                <!-- File name -->
+                <span class="text-muted" style="font-size:13px;">
+                    <i class="fa fa-file me-1"/> <t t-out="getFileName()"/>
+                </span>
+
+                <!-- Replace -->
+                <label class="cursor-pointer text-primary" title="Replace file">
+                    <i class="fa fa-pencil"/>
+                    <input type="file" class="d-none"
+                        t-on-change="uploadFile"
+                        accept=".pdf,.png,.jpg,.jpeg,.svg,.doc,.docx,.xls,.xlsx,.dwg,.dxf"/>
+                </label>
+
+                <!-- Delete -->
+                <i class="fa fa-trash text-danger cursor-pointer"
+                    title="Remove file"
+                    t-on-click="removeUploadedFile"/>
+            </div>
+
+        </div>
+    </t>
+
+    <t t-name="crmProductConfigurator.ptav-m2o">
+        <select
+            class="o_input w-50 flex-grow-1"
+            t-on-change="updateSelectedM2O"
+            t-att-name="'ptal-' + this.props.id">
+
+            <option value="">-- Select --</option>
+
+            <option t-foreach="this.props.attribute.m2o_values or []"
+                t-as="rec"
+                t-key="rec.id"
+                t-att-value="rec.id"
+                t-att-selected="this.getSelectedPTAV()?.m2o_res_id === rec.id">
+                <t t-out="rec.name"/>
+            </option>
+        </select>
+    </t>
+
+</templates>
