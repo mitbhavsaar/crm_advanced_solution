@@ -1,144 +1,93 @@
-##crm_advanced_solution
+CRM Advanced Solution – Functional Documentation
+  Overview
 
-1. crm_customisation:
+The CRM Advanced Solution bundle enhances Odoo CRM with usability, product configuration, and spreadsheet automation features.
+It is divided into three sub-modules:
 
-Overview
+crm_customisation – Improves CRM lead/contact experience
+crm_product_configurator – Adds a powerful attribute-based product configurator in CRM
+crm_spreadsheet_enhancement – Integrates CRM with spreadsheet-based cost calculators, similar to Sales Quotes
 
-This module enhances Odoo CRM by improving views, contact handling, and overall usability. It modifies the default CRM workflow to provide a more user-friendly list view, parent–child contact management, and automatic address completion.
+1 crm_customisation
 
+🔹 Purpose
+To improve contact management and CRM usability by enhancing views, auto-addressing, and parent–child contact handling.
+  Key Features
+  
+- Default List View
+CRM now opens directly in List View instead of Kanban
+Only Parent Partner Name is shown (child contacts are excluded for readability)
+
+- Additional Contacts Tab
+A new tab “Additional Contacts” is added to the CRM Lead form
+Displays all child contacts linked to the selected parent customer
+Updates reflect automatically in real time when child contacts are added, modified, or deleted
+
+- Contact Form Enhancements
+Auto-Fill City and State based on Pincode
+When entering a pincode, the system automatically fetches City and State
+Increases accuracy and reduces manual entry effort
+
+2 crm_product_configurator
+
+🔹 Purpose
+To configure dynamic product variants, attributes, pricing, and file-based inputs directly from CRM.
 Key Features
-1. Default List View (Instead of Kanban)
 
-When CRM opens, the default view is now List View instead of Kanban.
+- Product Tab + Material Lines
+A new Product tab is added inside CRM Leads
+Includes crm.material.line (One2Many) to manage line-wise product selections
 
-The list shows the Partner Name (Parent only), excluding child contacts.
+- Variant-Based Configurator Popup
+When a selected product has variants, a Configurator Popup opens
+Users can:
+Enter Quantity
+Get dynamic Pricing
+View every attribute
+Select Attribute Values
 
-2. Additional Contacts Tab
+- Advanced Attribute Display Types
+Display Type	Functionality
+File Upload	Upload, replace, or remove files as attribute values. Stored separately and downloadable later.
+Many2One Selector (M2O)	Select any Odoo model → list records → choose record as attribute value.
 
-A new tab called "Additional Contacts" is added on the CRM Lead form.
-
-This tab automatically displays all child contacts linked to the selected parent customer.
-
-If any child contact is updated or deleted, the changes reflect in this tab in real time.
-
-3. Contact Form Enhancements
-
-Auto-Fill Address Using Pincode
-
-When the user enters a pincode, the system automatically fetches and fills:
-
-City
-
-State
-
-This improves accuracy and speeds up address entry.
-
-2. crm_product_configurator:
-
-Overview
-
-This module introduces an advanced product configurator inside CRM. When a product is selected on a CRM Lead, a full configurator opens to manage attributes, variants, quantity, pricing, and file-upload based attributes.
-
-Key Features
-1. Product Tab with Material Lines
-
-The CRM Lead form includes a new Product tab.
-
-It contains a crm.material.line One2Many table where product lines are created.
-
-2. Variant-Based Configurator Popup
-
-When the selected product has variants, a configurator popup opens.
-
-Inside the configurator, the user can:
-
-Adjust quantity
-
-Fetch price automatically
-
-View all attributes
-
-Choose attribute values
-
-3. Attribute Enhancements
-
-Two new attribute display types have been introduced:
-
-a) File Upload Display Type
-
-If an attribute uses the File Upload display type:
-
-User can upload a file as the attribute value
-
-Can replace or remove the file
-
-Uploaded file is stored in a separate field on the product line
-
-After saving, the file is available for download by the user
-
-b) M2O Selector Display Type
-
-Display Type: Many2One Selector
-
-User can select any Odoo model
-
-All records of that model appear as a dropdown list
-
-User can choose any record as the attribute value
-
-4. On Confirm: Data Finalization
-
+- Data Finalization on Confirm
 When the configurator is confirmed:
+Attribute values merge into the line description
+File uploads stored on the product line
+Quantity, Price & Attributes fully applied to the CRM line
 
-All attribute values are merged into the line description
+3 crm_spreadsheet_enhancement
 
-Uploaded files are stored in a dedicated field
+🔹 Purpose
+To provide automated spreadsheet cost calculators for CRM leads, similar to Sales Quote Calculator.
 
-Price, Quantity, and Attributes are fully prepared on the CRM line
+  Key Features
+- Enable / Disable Setting
+CRM spreadsheet calculator can be enabled from Settings → CRM
 
-3. crm_spreadsheet_enhancement :
+- Template Selection
+New field added in settings: Quote Calculator Template
+Selected template is used while generating CRM calculators
 
-Overview
+- Smart Button in CRM Lead
+A Cost Calculator smart button appears on the CRM Lead
+Creates individual sheets for every CRM material line
 
-This module integrates CRM with Odoo Spreadsheet, similar to the Sales Quote Calculator.
-It generates line-wise cost calculator sheets for each CRM lead automatically.
+- Sheet Auto-Generation
+Each generated sheet includes:
+Header	Source
+Product	CRM Material Line Product
+Quantity	Material Line Quantity
+Others	Extracted dynamically from line description
 
-Key Features
-1. Enable/Disable Setting
+- Sync & Save Workflow
+Sync with Fields → Updates spreadsheet automatically based on CRM line values
+Save → Applies the sheet values back to CRM in bulk
 
-CRM spreadsheet calculator can be enabled/disabled from Settings → CRM.
+ Result
 
-Works the same as the Odoo Sales spreadsheet feature.
-
-2. Template Selection
-
-A new field “Quote Calculator Template” is added in CRM settings.
-
-The selected template is used for generating CRM cost calculator sheets.
-
-3. Smart Button in CRM Lead
-
-A Cost Calculator smart button appears in the CRM Lead form.
-
-Clicking it generates spreadsheet sheets for all material lines in the lead.
-
-4. Automatic Sheet Generation
-
-A separate sheet is created for every CRM material line.
-Sheet headers include:
-
-Field	Source
-Product	Product from the CRM line
-Quantity	Quantity from the material line
-Other headers	Extracted from the line description
-5. Sync with Fields
-
-When the user clicks “Sync with fields”, the spreadsheet updates automatically with CRM line values.
-
-Each sheet stays connected to its corresponding CRM line.
-
-6. Bulk Update via Save
-
-After modifying the spreadsheet, clicking Save updates all the sheets and applies the data line-wise back into CRM.
-
-This workflow behaves exactly like the Sales Quote Calculator.
+The CRM Advanced Solution enables:
+Better CRM handling and data accuracy
+Strong product configuration directly inside CRM
+Automated spreadsheet-based cost estimation with real-time sync
