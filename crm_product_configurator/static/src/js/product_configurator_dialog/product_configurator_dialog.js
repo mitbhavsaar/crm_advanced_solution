@@ -30,13 +30,13 @@ export class crmProductConfiguratorDialog extends Component {
         discard: Function,
         close: Function,
     };
-    
+
     static defaultProps = {
         edit: false,
     }
 
     setup() {
-        this.optionalProductsTitle = _t("Add optional products");      
+        this.optionalProductsTitle = _t("Add optional products");
         this.title = _t("Configure your product");
         this.rpc = rpc;
         this.state = useState({
@@ -57,11 +57,11 @@ export class crmProductConfiguratorDialog extends Component {
             updateFileUpload: this._updateFileUpload.bind(this),        // 🔥 NEW
             updateM2OValue: this._updateM2OValue.bind(this),            // 🔥 NEW
             isPossibleCombination: this._isPossibleCombination,
-              // ⭐ NEW: expose callback for auto-fill width
+            // ⭐ NEW: expose callback for auto-fill width
             autoFillWidthFromM2O: this.autoFillWidthFromM2O.bind(this),
         });
 
-        useEffect(() => {}, () => [this.state.products]);
+        useEffect(() => { }, () => [this.state.products]);
 
         onWillStart(async () => {
             const { products, optional_products } = await this._loadData(this.props.edit);
@@ -80,17 +80,32 @@ export class crmProductConfiguratorDialog extends Component {
             if (this.state.products.length > 0) {
                 this._checkExclusions(this.state.products[0]);
             }
+
+            // 🔥 NEW: Fetch is_width_check manually since backend might not send it
+            await this._enrichAttributesWithWidthCheck();
         });
     }
 
     autoFillWidthFromM2O(productTmplId, widthValue) {
+        console.log(`🚀 autoFillWidthFromM2O called for Product ${productTmplId} with width: ${widthValue}`);
         const product = this.state.products.find(p => p.product_tmpl_id === productTmplId);
-        if (!product) return;
+        if (!product) {
+            console.warn("❌ Product not found in state");
+            return;
+        }
 
-        const widthPTAL = product.attribute_lines.find(ptal =>
-            ptal.attribute.name.toLowerCase() === "width"
-        );
-        if (!widthPTAL) return;
+        // Find attribute that is strictly_numeric AND has is_width_check=True
+        const widthPTAL = product.attribute_lines.find(ptal => {
+            // console.log(`Checking PTAL ${ptal.id}: display_type=${ptal.attribute.display_type}, is_width_check=${ptal.attribute.is_width_check}`);
+            return ptal.attribute.display_type === "strictly_numeric" && ptal.attribute.is_width_check;
+        });
+
+        if (!widthPTAL) {
+            console.warn("❌ No matching 'Strictly numeric' + 'is_width_check' attribute found.");
+            return;
+        }
+
+        console.log(`✅ Found target attribute: ${widthPTAL.attribute.name} (ID: ${widthPTAL.id})`);
 
         const customPTAV = widthPTAL.attribute_values.find(v => v.is_custom);
         if (customPTAV) {
@@ -101,6 +116,84 @@ export class crmProductConfiguratorDialog extends Component {
 
         // 🔥 UI Refresh
         this.state.products = [...this.state.products];
+    }
+
+    // 🔥 NEW: Helper to fetch is_width_check AND m2o_model_technical_name
+    async _enrichAttributesWithWidthCheck() {
+        const allProducts = [...this.state.products, ...this.state.optionalProducts];
+        const attributeIds = new Set();
+
+        for (const product of allProducts) {
+            for (const ptal of product.attribute_lines || []) {
+                if (ptal.attribute && ptal.attribute.id) {
+                    attributeIds.add(ptal.attribute.id);
+                }
+            }
+        }
+
+        if (attributeIds.size === 0) return;
+
+        try {
+            // Fetch is_width_check AND m2o_model_id
+            const attributesData = await this.rpc("/web/dataset/call_kw/product.attribute/read", {
+                model: "product.attribute",
+                method: "read",
+                args: [[...attributeIds], ["is_width_check", "m2o_model_id", "pair_with_previous"]],
+                kwargs: {},
+            });
+
+            // Collect ir.model IDs
+            const irModelIds = new Set();
+            const attrToIrModelId = {};
+
+            for (const attr of attributesData) {
+                if (attr.m2o_model_id) {
+                    // m2o_model_id is [id, name]
+                    const irModelId = Array.isArray(attr.m2o_model_id) ? attr.m2o_model_id[0] : attr.m2o_model_id;
+                    if (irModelId) {
+                        irModelIds.add(irModelId);
+                        attrToIrModelId[attr.id] = irModelId;
+                    }
+                }
+            }
+
+            // Fetch model names from ir.model
+            const irModelMap = {};
+            if (irModelIds.size > 0) {
+                const irModelsData = await this.rpc("/web/dataset/call_kw/ir.model/read", {
+                    model: "ir.model",
+                    method: "read",
+                    args: [[...irModelIds], ["model"]],
+                    kwargs: {},
+                });
+                for (const m of irModelsData) {
+                    irModelMap[m.id] = m.model;
+                }
+            }
+
+            const attributeMap = {};
+            for (const attr of attributesData) {
+                attributeMap[attr.id] = {
+                    is_width_check: attr.is_width_check,
+                    m2o_model_technical_name: attrToIrModelId[attr.id] ? irModelMap[attrToIrModelId[attr.id]] : false,
+                    pair_with_previous: attr.pair_with_previous, // 🔥 NEW
+                };
+            }
+
+            // Update state
+            for (const product of allProducts) {
+                for (const ptal of product.attribute_lines || []) {
+                    if (ptal.attribute && attributeMap[ptal.attribute.id]) {
+                        ptal.attribute.is_width_check = attributeMap[ptal.attribute.id].is_width_check;
+                        ptal.attribute.m2o_model_technical_name = attributeMap[ptal.attribute.id].m2o_model_technical_name;
+                        ptal.attribute.pair_with_previous = attributeMap[ptal.attribute.id].pair_with_previous; // 🔥 NEW
+                    }
+                }
+            }
+            console.log("✅ Enriched attributes:", attributeMap);
+        } catch (err) {
+            console.error("❌ Failed to fetch attribute details:", err);
+        }
     }
 
     // 🔥 NEW: Store file upload in state
@@ -173,12 +266,12 @@ export class crmProductConfiguratorDialog extends Component {
         const thicknessAttributeLine = mainProduct.attribute_lines.find(
             ptal => ptal.attribute.name.toLowerCase() === 'thickness'
         );
-        
+
         if (thicknessAttributeLine && thicknessAttributeLine.selected_attribute_value_ids.length === 0) {
             const defaultThicknessValue = thicknessAttributeLine.attribute_values.find(
                 ptav => ptav.name === '5-7'
             );
-            
+
             if (defaultThicknessValue) {
                 this._updateProductTemplateSelectedPTAV(
                     mainProduct.product_tmpl_id,
@@ -386,7 +479,7 @@ export class crmProductConfiguratorDialog extends Component {
 
     _findProduct(productTmplId) {
         return this.state.products.find(p => p.product_tmpl_id === productTmplId) ||
-               this.state.optionalProducts.find(p => p.product_tmpl_id === productTmplId);
+            this.state.optionalProducts.find(p => p.product_tmpl_id === productTmplId);
     }
 
     _getChildProducts(productTmplId) {
@@ -424,7 +517,7 @@ export class crmProductConfiguratorDialog extends Component {
             const selectedCustomPtav = ptal.attribute_values?.find(
                 ptav => ptav.is_custom && ptal.selected_attribute_value_ids.includes(ptav.id)
             );
-            
+
             if (selectedCustomPtav && ptal.customValue) {
                 customValues.push({
                     ptav_id: selectedCustomPtav.id,

@@ -10,6 +10,7 @@ CRM_MATERIAL_LINE_BASE_FIELDS = [
     'quantity',
 ]
 
+
 class CrmLeadSpreadsheet(models.Model):
     _name = 'crm.lead.spreadsheet'
     _inherit = 'spreadsheet.mixin'
@@ -27,15 +28,17 @@ class CrmLeadSpreadsheet(models.Model):
     @api.model
     def get_list_data(self, model, list_id, field_names):
         """
-        ✅ THIS IS CALLED BY SPREADSHEET JS
-        Override base spreadsheet method to handle dynamic attributes
+        Override base spreadsheet method to handle dynamic attributes.
         """
-        _logger.info(f"🟡 [Spreadsheet] get_list_data called: model={model}, list_id={list_id}, fields={field_names}")
-        
+        _logger.info(
+            f"🟡 [Spreadsheet] get_list_data called: model={model}, "
+            f"list_id={list_id}, fields={field_names}"
+        )
+
         if model != 'crm.material.line':
             _logger.info(f"⚪ Not CRM model, using super: {model}")
             return super().get_list_data(model, list_id, field_names)
-        
+
         try:
             line_id = int(list_id)
         except (ValueError, TypeError):
@@ -48,7 +51,7 @@ class CrmLeadSpreadsheet(models.Model):
             return []
 
         _logger.info(f"✅ Found line {line_id}: {line.product_template_id.display_name}")
-        
+
         # Get attributes_json FIRST
         attrs = line.attributes_json or {}
         _logger.info(f"📦 attributes_json: {attrs}")
@@ -80,7 +83,7 @@ class CrmLeadSpreadsheet(models.Model):
         Internal method for other operations
         """
         self.ensure_one()
-        
+
         try:
             list_id_int = int(list_id)
         except (ValueError, TypeError):
@@ -92,7 +95,8 @@ class CrmLeadSpreadsheet(models.Model):
 
         row = {
             'id': line.id,
-            'product_template_id': line.product_template_id.display_name if line.product_template_id else '',
+            'product_template_id': line.product_template_id.display_name
+            if line.product_template_id else '',
             'quantity': line.quantity or 0,
         }
 
@@ -128,7 +132,9 @@ class CrmLeadSpreadsheet(models.Model):
         for rec in records:
             if rec.lead_id and rec.lead_id.material_line_ids:
                 for line in rec.lead_id.material_line_ids:
-                    rec.with_context(material_line_id=line.id)._dispatch_insert_list_revision()
+                    rec.with_context(
+                        material_line_id=line.id
+                    )._dispatch_insert_list_revision()
         return records
 
     # ------------------------------------------------------------------
@@ -143,7 +149,7 @@ class CrmLeadSpreadsheet(models.Model):
         data.update({
             'lead_id': self.lead_id.id if self.lead_id else False,
             'lead_display_name': self.lead_id.display_name if self.lead_id else False,
-            'sheet_id': self.id
+            'sheet_id': self.id,
         })
 
         spreadsheet_json = data.get('data') or {}
@@ -167,12 +173,15 @@ class CrmLeadSpreadsheet(models.Model):
             for rid in removed_ids:
                 if str(rid) in lists:
                     del lists[str(rid)]
-            sheets = [s for s in sheets if not any(str(rid) in json.dumps(s) for rid in removed_ids)]
+            sheets = [
+                s for s in sheets
+                if not any(str(rid) in json.dumps(s) for rid in removed_ids)
+            ]
 
         spreadsheet_json['lists'] = lists
         spreadsheet_json['sheets'] = sheets
-        
-        # ✅ CRITICAL FIX: Preload data for ALL lists
+
+        # ✅ Preload data for ALL lists
         _logger.info("🔥 Preloading data for all lists...")
         for list_id, list_config in lists.items():
             try:
@@ -184,11 +193,73 @@ class CrmLeadSpreadsheet(models.Model):
                     _logger.info(f"✅ Preloaded list {list_id}: {list_data}")
             except Exception as e:
                 _logger.error(f"❌ Failed to preload list {list_id}: {e}")
-        
+
         data['data'] = spreadsheet_json
         self.raw_spreadsheet_data = json.dumps(spreadsheet_json)
 
         return data
+
+    # ------------------------------------------------------------------
+    # HELPER: Get Columns
+    # ------------------------------------------------------------------
+    def _get_material_line_columns(self, line):
+        """
+        Helper to construct columns for a material line sheet.
+        Removes 'UOM' and places 'Quantity UOM' next to 'quantity'.
+        """
+        # 1. Base Fields
+        columns = list(CRM_MATERIAL_LINE_BASE_FIELDS)
+
+        # 2. Dynamic Attributes
+        dynamic_keys = list(line.attributes_json.keys()) if isinstance(line.attributes_json, dict) else []
+
+        # Remove 'UOM' if present (User request: "default UOM... nahi chahiye")
+        # We filter it out from dynamic keys AND base fields (just in case)
+        if 'UOM' in dynamic_keys:
+            dynamic_keys.remove('UOM')
+        if 'uom_id' in columns:
+            columns.remove('uom_id')
+
+        # 3. Handle 'Quantity UOM' placement
+        qty_uom_key = "Quantity UOM"
+        has_qty_uom = False
+        if qty_uom_key in dynamic_keys:
+            has_qty_uom = True
+            dynamic_keys.remove(qty_uom_key)
+
+        # 4. Priority Logic for remaining attributes
+        priority = []
+        template = line.product_template_id
+        if template:
+            for ptal in template.attribute_line_ids:
+                attr_name = ptal.attribute_id.name
+                if attr_name in dynamic_keys:
+                    priority.append(attr_name)
+                uom_name = f"{attr_name} UOM"
+                if uom_name in dynamic_keys:
+                    priority.append(uom_name)
+
+        ordered_dynamic = []
+        dynamic_keys_copy = list(dynamic_keys)
+
+        for p in priority:
+            if p in dynamic_keys_copy:
+                ordered_dynamic.append(p)
+                dynamic_keys_copy.remove(p)
+
+        ordered_dynamic.extend(sorted(dynamic_keys_copy))
+
+        # 5. Assemble final list
+        # Insert Quantity UOM after quantity
+        if has_qty_uom:
+            if 'quantity' in columns:
+                idx = columns.index('quantity') + 1
+                columns.insert(idx, qty_uom_key)
+            else:
+                columns.append(qty_uom_key)
+
+        columns.extend(ordered_dynamic)
+        return columns
 
     # ------------------------------------------------------------------
     # EMPTY DATA (initial load)
@@ -206,9 +277,7 @@ class CrmLeadSpreadsheet(models.Model):
             list_id = str(line.id)
             product_name = (line.product_template_id.display_name or "Item")[:31]
 
-            # dynamic attributes
-            dynamic_keys = list(line.attributes_json.keys()) if isinstance(line.attributes_json, dict) else []
-            columns = CRM_MATERIAL_LINE_BASE_FIELDS + dynamic_keys
+            columns = self._get_material_line_columns(line)
 
             data['sheets'].append({'id': sheet_id, 'name': product_name})
 
@@ -246,9 +315,7 @@ class CrmLeadSpreadsheet(models.Model):
         list_id = str(line.id)
         product_name = (line.product_template_id.display_name or "Item")[:31]
 
-        # Get dynamic keys and all columns
-        dynamic_keys = list(line.attributes_json.keys()) if isinstance(line.attributes_json, dict) else []
-        columns = CRM_MATERIAL_LINE_BASE_FIELDS + dynamic_keys
+        columns = self._get_material_line_columns(line)
 
         _logger.info(f"🔧 Creating sheet for line {line_id} with columns: {columns}")
 
@@ -262,7 +329,7 @@ class CrmLeadSpreadsheet(models.Model):
                 ftype = 'char'
             columns_meta.append({'name': col, 'type': ftype})
 
-        # ✅ CRITICAL FIX: Get actual data NOW
+        # ✅ Get actual data now
         attrs = line.attributes_json or {}
         _logger.info(f"📦 Line {line_id} attributes_json: {attrs}")
 
@@ -270,7 +337,7 @@ class CrmLeadSpreadsheet(models.Model):
         row_data = []
         for col_meta in columns_meta:
             field_name = col_meta['name']
-            
+
             if field_name in line._fields:
                 # Standard field
                 val = line[field_name]
@@ -281,7 +348,7 @@ class CrmLeadSpreadsheet(models.Model):
             else:
                 # Dynamic attribute
                 cell_value = attrs.get(field_name, '')
-            
+
             row_data.append(cell_value)
             _logger.info(f"  📝 {field_name} = {cell_value}")
 
@@ -307,15 +374,29 @@ class CrmLeadSpreadsheet(models.Model):
             },
         ]
 
-        # ✅ CRITICAL: Insert actual cell values immediately after creating the list
+        # ✅ Insert actual cell values immediately after creating the list
         for col_idx, (col_meta, cell_value) in enumerate(zip(columns_meta, row_data)):
+            # 1. Data row
             commands.append({
                 'type': 'UPDATE_CELL',
                 'sheetId': sheet_id,
                 'col': col_idx,
                 'row': 1,  # Row 1 is data row (Row 0 is header)
-                'content': str(cell_value) if cell_value not in (None, False, '') else '',
+                'content': str(cell_value)
+                if cell_value not in (None, False, '') else '',
             })
+
+            # 2. Header cleanup (for "__1" style names)
+            field_name = col_meta['name']
+            if "__" in field_name:
+                display_name = field_name.split("__")[0]
+                commands.append({
+                    'type': 'UPDATE_CELL',
+                    'sheetId': sheet_id,
+                    'col': col_idx,
+                    'row': 0,
+                    'content': display_name,
+                })
 
         # Add table formatting
         commands.append({
@@ -324,7 +405,12 @@ class CrmLeadSpreadsheet(models.Model):
             'tableType': 'static',
             'ranges': [{
                 '_sheetId': sheet_id,
-                '_zone': {'top': 0, 'bottom': 1, 'left': 0, 'right': len(columns_meta) - 1}
+                '_zone': {
+                    'top': 0,
+                    'bottom': 1,
+                    'left': 0,
+                    'right': len(columns_meta) - 1,
+                },
             }],
             'config': {
                 'firstColumn': False,
@@ -332,7 +418,7 @@ class CrmLeadSpreadsheet(models.Model):
                 'totalRow': False,
                 'bandedRows': True,
                 'styleId': 'TableStyleMedium5',
-            }
+            },
         })
 
         # Final update command
@@ -362,14 +448,41 @@ class CrmLeadSpreadsheet(models.Model):
                     line_id = int(sid.replace("sheet_", ""))
                     if line_id not in current_line_ids:
                         self._delete_sheet_for_material_line(line_id)
-                except:
+                except Exception:
                     pass
 
-        # Re-add missing
-        existing_sheet_ids = {int(s['id'].replace('sheet_', '')) for s in current_sheets if s.get('id', '').startswith('sheet_')}
+        # Re-add missing OR update if columns changed
+        existing_sheet_ids = {
+            int(s['id'].replace('sheet_', ''))
+            for s in current_sheets
+            if s.get('id', '').startswith('sheet_')
+        }
+
         for line in self.lead_id.material_line_ids:
+            # 2. Check if sheet exists
+            if line.id in existing_sheet_ids:
+                list_id = str(line.id)
+                if list_id in current_lists:
+                    current_columns = current_lists[list_id].get('columns', [])
+
+                    expected_columns = self._get_material_line_columns(line)
+
+                    if current_columns != expected_columns:
+                        _logger.info(
+                            f"♻️ Columns changed for line {line.id}. "
+                            f"Re-creating sheet."
+                        )
+                        self._delete_sheet_for_material_line(line.id)
+                        self.with_context(
+                            material_line_id=line.id
+                        )._dispatch_insert_list_revision()
+                        continue
+
+            # 3. Create if missing
             if line.id not in existing_sheet_ids:
-                self.with_context(material_line_id=line.id)._dispatch_insert_list_revision()
+                self.with_context(
+                    material_line_id=line.id
+                )._dispatch_insert_list_revision()
 
     # ------------------------------------------------------------------
     # CREATE SHEET STRUCTURE
@@ -385,8 +498,7 @@ class CrmLeadSpreadsheet(models.Model):
         list_id = str(line.id)
         name = (line.product_template_id.display_name or "Item")[:31]
 
-        dynamic_keys = list(line.attributes_json.keys()) if isinstance(line.attributes_json, dict) else []
-        columns = CRM_MATERIAL_LINE_BASE_FIELDS + dynamic_keys
+        columns = self._get_material_line_columns(line)
 
         return {
             'sheet': {'id': sheet_id, 'name': name},
@@ -399,8 +511,10 @@ class CrmLeadSpreadsheet(models.Model):
                 'name': name,
                 'context': {},
                 'orderBy': [],
-                'fieldMatching': {'material_line_ids': {'chain': 'lead_id', 'type': 'many2one'}},
-            }
+                'fieldMatching': {
+                    'material_line_ids': {'chain': 'lead_id', 'type': 'many2one'},
+                },
+            },
         }
 
     # ------------------------------------------------------------------
@@ -417,7 +531,7 @@ class CrmLeadSpreadsheet(models.Model):
 
         try:
             self._dispatch_commands(commands)
-        except:
+        except Exception:
             self._cleanup_deleted_sheets_from_data(material_line_id)
 
     def _cleanup_deleted_sheets_from_data(self, material_line_id):
@@ -427,11 +541,13 @@ class CrmLeadSpreadsheet(models.Model):
             data = json.loads(self.raw_spreadsheet_data)
             sid = f"sheet_{material_line_id}"
             if 'sheets' in data:
-                data['sheets'] = [s for s in data['sheets'] if s.get('id') != sid]
+                data['sheets'] = [
+                    s for s in data['sheets'] if s.get('id') != sid
+                ]
             if 'lists' in data and str(material_line_id) in data['lists']:
                 del data['lists'][str(material_line_id)]
             self.raw_spreadsheet_data = json.dumps(data)
-        except:
+        except Exception:
             pass
 
     # ------------------------------------------------------------------
@@ -447,7 +563,7 @@ class CrmLeadSpreadsheet(models.Model):
                 'type': 'success',
                 'message': _('Sheets synced with CRM Material Lines'),
                 'next': {'type': 'ir.actions.act_window_close'},
-            }
+            },
         }
 
     # ------------------------------------------------------------------
@@ -473,10 +589,10 @@ class CrmLeadSpreadsheet(models.Model):
 
         rows = []
         for line in self.lead_id.material_line_ids:
-
             row = {
                 'id': line.id,
-                'name': line.product_template_id.display_name if line.product_template_id else '',
+                'name': line.product_template_id.display_name
+                if line.product_template_id else '',
                 'quantity': line.quantity,
             }
 
@@ -496,9 +612,7 @@ class CrmLeadSpreadsheet(models.Model):
 
         lists = []
         for line in self.lead_id.material_line_ids:
-
-            dynamic_keys = list(line.attributes_json.keys()) if isinstance(line.attributes_json, dict) else []
-            columns = CRM_MATERIAL_LINE_BASE_FIELDS + dynamic_keys
+            columns = self._get_material_line_columns(line)
 
             lists.append({
                 'id': str(line.id),

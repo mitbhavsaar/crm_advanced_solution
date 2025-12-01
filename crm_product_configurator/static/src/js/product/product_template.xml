@@ -25,12 +25,16 @@
                     <span>This option or combination of options is not available</span>
                 </div>
             </div>
-            <t t-foreach="this.props.attribute_lines" t-as="ptal" t-key="ptal.id">
-                <PTAL t-props="ptal" productTmplId="this.props.product_tmpl_id"/>
-            </t>
+            <div class="d-flex flex-wrap gap-2 align-items-start">
+                <t t-foreach="this.props.attribute_lines" t-as="ptal" t-key="ptal.id">
+                    <!-- Force new line for non-paired attributes (except the first one) -->
+                    <div t-if="!ptal.attribute.pair_with_previous and ptal_index > 0" class="w-100"></div>
+                    <PTAL t-props="ptal" productTmplId="this.props.product_tmpl_id"/>
+                </t>
+            </div>
         </td>
-        <td class="o_crm_product_configurator_qty py-3 px-0 text-end">
-            <div t-if="!this.props.optional" class="input-group justify-content-end">
+        <td class="o_crm_product_configurator_qty py-3 px-0 text-end" t-if="this.props.optional">
+            <div class="input-group justify-content-end">
                 <button
                     class="btn btn-secondary d-none d-md-inline-block"
                     aria-label="Remove one"
@@ -50,16 +54,6 @@
                     <i class="fa fa-plus"/>
                 </button>
             </div>
-            <div t-else="">
-                <h5 class="text-nowrap" t-out="getFormattedPrice()"/>
-            </div>
-            <a
-                class="d-block mt-2"
-                role="button"
-                t-if="!this.props.optional &amp;&amp; this.env.mainProductTmplId !== this.props.product_tmpl_id"
-                t-on-click="() => this.env.removeProduct(this.props.product_tmpl_id)">
-                Remove product
-            </a>
         </td>
         <td class="o_crm_product_configurator_price py-3 px-0 text-end" name="price">
             <div t-if="!this.props.optional" class="input-group justify-content-end">
@@ -74,6 +68,13 @@
                     <i class="fa fa-plus"/> Add
                 </button>
             </div>
+            <a
+                class="d-block mt-2"
+                role="button"
+                t-if="!this.props.optional &amp;&amp; this.env.mainProductTmplId !== this.props.product_tmpl_id"
+                t-on-click="() => this.env.removeProduct(this.props.product_tmpl_id)">
+                Remove product
+            </a>
         </td>
     </t>
 </templates>

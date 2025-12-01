@@ -61,6 +61,10 @@ class CrmMaterialLine(models.Model):
                 if display_type == "file_upload":
                     continue
 
+                # 🔥 SKIP is_quantity attributes
+                if attr.is_quantity:
+                    continue
+
                 # M2O
                 if display_type == "m2o" and ptav.m2o_res_id:
                     model = attr.m2o_model_id.model
@@ -88,6 +92,7 @@ class CrmMaterialLine(models.Model):
         'attached_file_name',
         'product_template_attribute_value_ids',
         'product_custom_attribute_value_ids',
+        'product_template_id'
     )
     def _compute_attributes_json(self):
         """Attributes JSON WITHOUT file upload"""
@@ -95,33 +100,104 @@ class CrmMaterialLine(models.Model):
             data = {}
             
             try:
-                # Template attributes (SKIP file_upload)
-                for ptav in record.product_template_attribute_value_ids:
-                    attr = ptav.attribute_id
-                    if not attr or getattr(ptav, 'is_custom', False):
+                # 1. Get all selected PTAVs for this record
+                selected_ptavs = record.product_template_attribute_value_ids
+                
+                # 2. Iterate through TEMPLATE lines to ensure correct order
+                if record.product_template_id:
+                    # Track usage of attribute names to handle duplicates (e.g. multiple UOMs)
+                    attr_name_counts = {}
+
+                    for ptal in record.product_template_id.attribute_line_ids:
+                        attr = ptal.attribute_id
+                        
+                        # Find selected value for this line
+                        # We filter selected_ptavs to find the one belonging to this line
+                        ptav = selected_ptavs.filtered(lambda v: v.attribute_line_id == ptal)
+                        
+                        if not ptav:
+                            continue
+                        
+                        # Handle multi-select (though usually 1 per line for these types)
+                        # For JSON map, we'll take the first one or join them? 
+                        # Configurator usually enforces single select for these types.
+                        ptav = ptav[0]
+
+                        if getattr(ptav, 'is_custom', False):
+                            # Custom values handled separately or here?
+                            # Original code skipped is_custom here and handled it in loop below.
+                            # But we want to maintain ORDER.
+                            # Let's check if we can get the custom value here.
+                            pass
+
+                        display_type = attr.display_type
+                        
+                        # 🔥 SKIP file_upload from JSON
+                        if display_type == "file_upload":
+                            continue
+
+                        # 🔥 SKIP is_quantity attributes
+                        if attr.is_quantity:
+                            continue
+
+                        # Generate Unique Key
+                        base_key = attr.name
+                        count = attr_name_counts.get(base_key, 0)
+                        if count == 0:
+                            key = base_key
+                        else:
+                            key = f"{base_key}__{count}"
+                        attr_name_counts[base_key] = count + 1
+
+                        # Get Value
+                        value = ""
+                        if ptav.is_custom:
+                            # Find custom value
+                            custom_val = record.product_custom_attribute_value_ids.filtered(
+                                lambda c: c.custom_product_template_attribute_value_id == ptav
+                            )
+                            if custom_val:
+                                value = custom_val[0].custom_value
+                        elif display_type == "m2o" and ptav.m2o_res_id:
+                            rec_m2o = self.env[attr.m2o_model_id.model].sudo().browse(ptav.m2o_res_id)
+                            value = rec_m2o.display_name
+                        else:
+                            value = ptav.name
+
+                        if value:
+                            data[key] = value
+
+                # 3. Smart Sort: Move "Name UOM" next to "Name"
+                # Convert to list of items to manipulate order
+                items = list(data.items())
+                final_items = []
+                processed_keys = set()
+                
+                # Helper to find UOM item for a given base key
+                def get_uom_item(base_key):
+                    # Check for "BaseKey UOM" or "BaseKey Uom"
+                    for k, v in items:
+                        if k in processed_keys:
+                            continue
+                        if k.lower() == f"{base_key} uom".lower():
+                            return (k, v)
+                    return None
+
+                for key, value in items:
+                    if key in processed_keys:
                         continue
-
-                    key = attr.name
-                    display_type = attr.display_type
-
-                    # 🔥 SKIP file_upload from JSON
-                    if display_type == "file_upload":
-                        continue
-
-                    # M2O
-                    if display_type == "m2o" and ptav.m2o_res_id:
-                        rec = self.env[attr.m2o_model_id.model].sudo().browse(ptav.m2o_res_id)
-                        data[key] = rec.display_name
-                        continue
-
-                    # Normal
-                    data[key] = ptav.name
-
-                # Custom Attributes
-                for custom in record.product_custom_attribute_value_ids:
-                    ptav = custom.custom_product_template_attribute_value_id
-                    if ptav and ptav.attribute_id:
-                        data[ptav.attribute_id.name] = custom.custom_value
+                    
+                    final_items.append((key, value))
+                    processed_keys.add(key)
+                    
+                    # Check if this key has a corresponding UOM
+                    uom_item = get_uom_item(key)
+                    if uom_item:
+                        final_items.append(uom_item)
+                        processed_keys.add(uom_item[0])
+                
+                # Reconstruct dict with new order
+                data = dict(final_items)
 
             except Exception as e:
                 _logger.exception(f"❌ Error computing attributes_json: {e}")

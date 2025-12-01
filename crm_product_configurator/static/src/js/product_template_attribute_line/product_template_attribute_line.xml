@@ -2,21 +2,28 @@
 <templates xml:space="preserve">
     <!-- Product attributes line template -->
     <t t-name="crmProductConfigurator.ptal">
-        <div name="ptal" t-attf-class="#{this.props.attribute_values.length === 1 &amp;&amp; hasPTAVCustom() ? 'd-flex' : ''}">
+        <div name="ptal" 
+             t-attf-class="#{this.props.attribute_values.length === 1 &amp;&amp; hasPTAVCustom() ? 'd-flex' : ''} #{this.props.attribute.pair_with_previous || this.props.attribute.display_type === 'strictly_numeric' ? 'w-auto' : 'w-100'}">
         <!-- If the attribute line contains only one attribute value, we don't show the attribute
              value template or the attribute line title unless the single attribute value is custom,
              whereas in this case, only the title of the attribute line and the custom value
              template are rendered. -->
-            <div class="d-flex flex-column flex-lg-row gap-2 mb-2">
+            <div class="d-flex  gap-2 mb-2" t-att-class= "this.props.attribute.pair_with_previous || this.props.attribute.display_type === 'strictly_numeric'
+                              ? 'flex-row align-items-center justify-content-start'
+                              : 'flex-column flex-lg-row'">
 
                 <!-- LABEL -->
-                <label t-if="this.props.attribute_values.length >= 1"
+                <label t-if="this.props.attribute.pair_with_previous !== true"
                     t-out="this.props.attribute.name"
-                    class="fw-bold text-break w-lg-25"/>
+                    t-att-class="'fw-bold text-break ' + (this.props.attribute.display_type === 'strictly_numeric' ? 'me-2' : 'w-lg-25')"
+                    t-att-style="this.props.attribute.display_type === 'strictly_numeric' ? 'white-space: nowrap;' : ''"/>
                     
-                <!-- CASE 1: FILE UPLOAD ALWAYS SHOW INPUT -->
+            <!-- CASE 1: FILE UPLOAD ALWAYS SHOW INPUT -->
                 <t t-if="this.props.attribute.display_type === 'file_upload'">
                     <t t-call="crmProductConfigurator.ptav-file-upload"/>
+                </t>
+                <t t-elif="isSelectedPTAVCustom() and this.props.attribute.display_type === 'strictly_numeric'">
+                    <t t-call="crmProductConfigurator.ptav-strictly-numeric"/>
                 </t>
                 <!-- CASE: M2O SELECTOR ALWAYS SHOW DROPDOWN -->
                 <t t-elif="this.props.attribute.display_type === 'm2o'">
@@ -56,7 +63,7 @@
     </t>
     <!-- Attributes value templates -->
     <t t-name="crmProductConfigurator.ptav-select">
-        <select class="o_input w-50 flex-grow-1"
+        <select class="o_input ptal-small-select text-center"
             t-on-change="updateSelectedPTAV"
             t-att-name="'ptal-' + this.props.id">
             <option
@@ -202,7 +209,7 @@
 
     <t t-name="crmProductConfigurator.ptav-m2o">
         <select
-            class="o_input w-50 flex-grow-1"
+            class="o_input w-50 flex-grow-1 text-center"
             t-on-change="updateSelectedM2O"
             t-att-name="'ptal-' + this.props.id">
 
@@ -217,5 +224,24 @@
             </option>
         </select>
     </t>
+    <!-- STRICTLY NUMERIC CUSTOM INPUT -->
+    <t t-name="crmProductConfigurator.ptav-strictly-numeric">
+        <div class="d-flex flex-column">
+            <input class="o_input mb-1 text-center"
+                style="width: 80px;"
+                type="text"
+                placeholder="Enter a Numeric value"
+                t-att-value="this.props.customValue or ''"
+                t-on-input="validateNumeric"
+                t-on-change="updateCustomValue"/>
+
+            <t t-if="this.numericWarning">
+                <span class="text-danger d-block" style="font-size: 12px;">
+                    <t t-out="this.numericWarning"/>
+                </span>
+            </t>
+        </div>
+    </t>
+
 
 </templates>

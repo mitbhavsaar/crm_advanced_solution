@@ -3,7 +3,7 @@
 import { Component } from "@odoo/owl";
 import { formatCurrency } from "@web/core/currency";
 import { onMounted } from "@odoo/owl";
-import { rpc } from "@web/core/network/rpc"; 
+import { rpc } from "@web/core/network/rpc";
 
 export class ProductTemplateAttributeLine extends Component {
     static template = "crmProductConfigurator.ptal";
@@ -19,10 +19,23 @@ export class ProductTemplateAttributeLine extends Component {
                 display_type: {
                     type: String,
                     validate: t =>
-                        ["color", "multi", "pills", "radio", "select", "file_upload", "m2o"].includes(t),
+                        [
+                            "color",
+                            "multi",
+                            "pills",
+                            "radio",
+                            "select",
+                            "file_upload",
+                            "m2o",
+                            "strictly_numeric"       // 🔥 NEW TYPE VALIDATION
+                        ].includes(t),
                 },
                 m2o_model_id: { type: [Boolean, Object], optional: true },
                 m2o_values: { type: Array, element: Object, optional: true },
+                pair_with_previous: { type: Boolean, optional: true },
+                is_width_check: { type: Boolean, optional: true }, // 🔥 NEW
+                m2o_model_technical_name: { type: [String, Boolean], optional: true }, // 🔥 NEW
+
             },
         },
         attribute_values: {
@@ -36,8 +49,7 @@ export class ProductTemplateAttributeLine extends Component {
                     image: [Boolean, String],
                     is_custom: Boolean,
                     excluded: { type: Boolean, optional: true },
-                    m2o_res_id: {optional: true },
-
+                    m2o_res_id: { optional: true },
                 },
             },
         },
@@ -51,32 +63,23 @@ export class ProductTemplateAttributeLine extends Component {
     };
 
     setup() {
-        // 🔥 CRITICAL FIX: Initialize fresh file state (never load from PTAV)
-        this.fileState = {
-            fileName: null,
-            fileData: null,
-        };
-        
-        // 🔥 NEW: M2O state - always start with no selection
+        this.fileState = { fileName: null, fileData: null };
         this.m2oSelectedId = null;
+        this.numericWarning = "";
 
         onMounted(() => {
-            // 🔥 FIX: Syntax error thik kiya - M2O ko exclude karein
             if (
                 this.props.attribute_values.length === 1 &&
                 this.props.selected_attribute_value_ids.length === 0 &&
-                this.props.attribute.display_type !== "m2o" // ✅ M2O ko exclude karein
+                this.props.attribute.display_type !== "m2o"
             ) {
                 this.updateSelectedPTAV({
                     target: { value: this.props.attribute_values[0].id.toString() },
                 });
             }
-            
-            // 🔥 NEW: M2O ke liye explicitly clear selection
+
             if (this.props.attribute.display_type === "m2o") {
                 this.m2oSelectedId = null;
-                
-                // Parent ko bhi notify karein
                 if (this.env.updateM2OValue) {
                     this.env.updateM2OValue(
                         this.props.productTmplId,
@@ -88,9 +91,6 @@ export class ProductTemplateAttributeLine extends Component {
         });
     }
 
-    // -----------------------------
-    // DEFAULT PTAV UPDATE
-    // -----------------------------
     updateSelectedPTAV(event) {
         this.env.updateProductTemplateSelectedPTAV(
             this.props.productTmplId,
@@ -108,9 +108,6 @@ export class ProductTemplateAttributeLine extends Component {
         );
     }
 
-    // -----------------------------
-    // TEMPLATE SELECTION
-    // -----------------------------
     getPTAVTemplate() {
         switch (this.props.attribute.display_type) {
             case "color":
@@ -127,6 +124,8 @@ export class ProductTemplateAttributeLine extends Component {
                 return "entrivis_file_upload.ptav-file-upload";
             case "m2o":
                 return "crmProductConfigurator.ptav-m2o";
+            case "strictly_numeric":         // 🔥 NEW TEMPLATE CASE
+                return "crmProductConfigurator.ptav-strictly-numeric";
         }
     }
 
@@ -151,100 +150,92 @@ export class ProductTemplateAttributeLine extends Component {
         );
     }
 
-    // -----------------------------
-    // FILE UPLOAD LOGIC - ALWAYS FRESH
-    // -----------------------------
     getSelectedPTAV() {
         return this.props.attribute_values.find(v =>
             this.props.selected_attribute_value_ids.includes(v.id)
         );
     }
 
-    // 🔥 FIX: Return fresh file state, never from PTAV
     getFileName() {
         return this.fileState.fileName || "";
     }
 
-    // 🔥 FIX: Store file in component state, send to parent via env callback
     async uploadFile(ev) {
         const file = ev.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
-
         reader.onload = async e => {
             const base64 = e.target.result.split(",")[1];
-            
-            // Store in component state
             this.fileState.fileName = file.name;
             this.fileState.fileData = base64;
 
-            // 🔥 NEW: Notify parent dialog to store file payload
             if (this.env.updateFileUpload) {
                 this.env.updateFileUpload(
                     this.props.productTmplId,
                     this.props.id,
-                    {
-                        file_name: file.name,
-                        file_data: base64,
-                    }
+                    { file_name: file.name, file_data: base64 }
                 );
             }
-
-            this.render(); // refresh UI
+            this.render();
         };
-
         reader.readAsDataURL(file);
     }
-    
+
     removeUploadedFile() {
         this.fileState.fileName = null;
         this.fileState.fileData = null;
 
-        // notify dialog to reset file payload
         if (this.env.updateFileUpload) {
             this.env.updateFileUpload(
                 this.props.productTmplId,
                 this.props.id,
-                null  // reset file payload completely
+                null
             );
         }
+        this.render();
+    }
+    validateNumeric(event) {
+        const value = event.target.value;
+        const isValid = /^[0-9]*$/.test(value);
 
+        if (!isValid) {
+            this.numericWarning = "Only numeric values are allowed";
+        } else {
+            this.numericWarning = "";
+        }
+
+        // restrict input visually
+        event.target.value = value.replace(/[^0-9]/g, "");
+
+        // save the cleaned numeric value
+        this.updateCustomValue(event);
         this.render();
     }
 
-
     async updateSelectedM2O(ev) {
-        const value = ev.target.value;
+        const resId = parseInt(ev.target.value || 0);
 
-        // empty selection
-        if (value === "") {
-            this.m2oSelectedId = null;
-            if (this.env.updateM2OValue) {
-                this.env.updateM2OValue(
-                    this.props.productTmplId,
-                    this.props.id,
-                    null
-                );
+        this.env.updateM2OValue(
+            this.props.productTmplId,
+            this.props.id,
+            resId || null
+        );
+
+        if (!resId) {
+            // Reset width if profile name is cleared
+            if (this.props.attribute.m2o_model_technical_name === "profile.name" && this.env.autoFillWidthFromM2O) {
+                this.env.autoFillWidthFromM2O(this.props.productTmplId, "");
+                this.render();
             }
-            this.render();
             return;
         }
 
-        const resId = parseInt(value);
-        this.m2oSelectedId = resId;
-
-        // normal M2O propagate
-        if (this.env.updateM2OValue) {
-            this.env.updateM2OValue(
-                this.props.productTmplId,
-                this.props.id,
-                resId
-            );
-        }
-
-        // only profile → width autofill
-        if (this.props.attribute.m2o_model_id?.model === "profile.name") {
+        // only for profile width autofill
+        if (
+            this.props.attribute.m2o_model_technical_name === "profile.name"
+        ) {
+            console.log(`🔍 M2O selected for profile.name. ResID: ${resId}`);
             const result = await rpc("/web/dataset/call_kw/profile.name/read", {
                 model: "profile.name",
                 method: "read",
@@ -252,67 +243,24 @@ export class ProductTemplateAttributeLine extends Component {
                 kwargs: {},
             });
 
-            const width = result?.length ? result[0].width : false;
+            const width = result?.length ? result[0].width : "";
+            console.log(`📏 Fetched width: ${width}`);
 
-            // width found → autofill
-            if (width || width === 0) {
-                if (this.env.autoFillWidthFromM2O) {
-                    this.env.autoFillWidthFromM2O(
-                        this.props.productTmplId,
-                        String(width),
-                    );
-                }
-
-                // refresh UI immediately
-                this.render();
-                return;
+            if (this.env.autoFillWidthFromM2O) {
+                this.env.autoFillWidthFromM2O(
+                    this.props.productTmplId,
+                    String(width)
+                );
+            } else {
+                console.warn("❌ autoFillWidthFromM2O not found in env");
             }
 
-            // width missing → allow manual custom text input
             this.render();
-            return;
         }
-
-        console.log("🔍 Profile selected, fetching width...");
-
-        // read width from profile
-        let result = false;
-        try {
-            result = await rpc("/web/dataset/call_kw/profile.name/read", {
-                model: "profile.name",
-                method: "read",
-                args: [[resId], ["width"]],
-                kwargs: {},
-            });
-        } catch (e) {
-            console.error("❌ RPC error:", e);
-        }
-
-        const width = result?.length ? result[0].width : false;
-        console.log("📊 Width from profile:", width);
-
-        // if width null → do not autofill
-        if (!width && width !== 0) {
-            console.log("⚠️ No width value, skipping autofill");
-            this.render();
-            return;
-        }
-
-        // ✅ Notify dialog to autofill width
-        if (this.env.autoFillWidthFromM2O) {
-            console.log("✅ Calling autoFillWidthFromM2O with width:", width);
-            this.env.autoFillWidthFromM2O(
-                this.props.productTmplId,
-                String(width)
-            );
-        }
-
-        // Don't render - let parent dialog handle it
     }
 
 
     getSelectedM2OId() {
-        // 🔥 FIX: Always use component state, never from PTAV
         return this.m2oSelectedId;
     }
 }

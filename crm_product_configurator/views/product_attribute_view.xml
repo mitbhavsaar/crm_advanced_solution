@@ -9,6 +9,10 @@
             <!-- Insert below Display Type field -->
             <xpath expr="//field[@name='display_type']" position="after">
                 <field name="m2o_model_id" options="{'no_create': True}" placeholder="Select model" invisible="display_type != 'm2o'"/>
+                <field name="pair_with_previous" invisible = "display_type not in  ['radio', 'select']"/>
+                <field name="is_width_check" invisible="display_type != 'strictly_numeric'"/>
+                <field name="is_quantity" invisible="display_type != 'strictly_numeric'"/>
+
             </xpath>
 
         </field>

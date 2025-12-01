@@ -22,3 +22,5 @@ class GelCoat(models.Model):
     _description = "Gel Coat"
 
     name = fields.Char(string="Name", required=True, tracking=True)
+
+

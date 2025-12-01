@@ -170,6 +170,21 @@ class ProductConfiguratorController(Controller):
                 custom_attribute_values = product_data.get('custom_attribute_values', [])
                 m2o_values = product_data.get('m2o_values', [])
 
+                # 🔥 CHECK FOR QUANTITY ATTRIBUTE
+                # Iterate through custom values to find if any attribute is marked as 'is_quantity'
+                for custom_val in custom_attribute_values:
+                    ptav_id = custom_val.get('ptav_id')
+                    custom_value = custom_val.get('custom_value')
+                    
+                    if ptav_id and custom_value:
+                        ptav = request.env['product.template.attribute.value'].browse(int(ptav_id))
+                        if ptav.attribute_id.is_quantity:
+                            try:
+                                quantity = float(custom_value)
+                                _logger.info(f"✅ Quantity set from attribute '{ptav.attribute_id.name}': {quantity}")
+                            except ValueError:
+                                _logger.warning(f"⚠️ Invalid quantity value '{custom_value}' for attribute '{ptav.attribute_id.name}'")
+
                 # 🔥 FILE UPLOAD PAYLOAD (from frontend)
                 file_upload_payload = product_data.get('file_upload', {}) or {}
                 payload_file_name = file_upload_payload.get('file_name') or file_upload_payload.get('name')
@@ -264,44 +279,61 @@ class ProductConfiguratorController(Controller):
                 # =========================
                 # BUILD DESCRIPTION (SKIP file_upload)
                 # =========================
+                # =========================
+                # BUILD DESCRIPTION (Refactored for Pair with Previous)
+                # =========================
                 attribute_lines = []
-                for attr_value in attribute_values:
-                    # 🔥 SKIP file_upload from description
-                    if attr_value.attribute_id.display_type == "file_upload":
-                        continue
-                    
-                    if not attr_value.is_custom:
-                        # M2O attribute
-                        if attr_value.attribute_id.display_type == "m2o":
-                            if attr_value.m2o_res_id:
-                                rec = request.env[
-                                    attr_value.attribute_id.m2o_model_id.model
-                                ].sudo().browse(attr_value.m2o_res_id)
-                                attribute_lines.append(
-                                    f"• {attr_value.attribute_id.name}: {rec.display_name}"
-                                )
-                            else:
-                                attribute_lines.append(
-                                    f"• {attr_value.attribute_id.name}: {attr_value.name}"
-                                )
-                        # Normal attribute
-                        else:
-                            attribute_lines.append(
-                                f"• {attr_value.attribute_id.name}: {attr_value.name}"
-                            )
+                
+                # Helper to find custom value for a PTAL
+                def get_custom_val(ptal):
+                    for cv in custom_attribute_values:
+                        if int(cv.get('ptav_id', 0)) in ptal.product_template_value_ids.ids:
+                            return cv.get('custom_value')
+                    return None
 
-                # Custom values
-                for custom_val in custom_attribute_values:
-                    ptav_id = custom_val.get('ptav_id')
-                    custom_value = custom_val.get('custom_value', '')
-                    if ptav_id and custom_value:
-                        ptav = request.env['product.template.attribute.value'].sudo().browse(
-                            int(ptav_id)
-                        )
-                        if ptav.exists() and ptav.is_custom:
-                            attribute_lines.append(
-                                f"• {ptav.attribute_id.name}: {custom_value}"
-                            )
+                for ptal in template.attribute_line_ids:
+                    # Skip file upload
+                    if ptal.attribute_id.display_type == "file_upload":
+                        continue
+
+                    # Skip is_quantity attributes
+                    if ptal.attribute_id.is_quantity:
+                        continue
+
+                    # Find selected PTAVs for this line
+                    selected_ptavs = attribute_values.filtered(lambda v: v.attribute_line_id == ptal)
+                    
+                    if not selected_ptavs:
+                        continue
+
+                    # Get display values
+                    display_values = []
+                    for ptav in selected_ptavs:
+                        val = ""
+                        if ptav.is_custom:
+                            val = get_custom_val(ptal) # No fallback to name
+                        elif ptal.attribute_id.display_type == "m2o" and ptav.m2o_res_id:
+                             rec = request.env[ptal.attribute_id.m2o_model_id.model].sudo().browse(ptav.m2o_res_id)
+                             val = rec.display_name
+                        else:
+                            val = ptav.name
+                        display_values.append(val)
+                    
+                    # Filter out empty or '0' values
+                    display_values = [v for v in display_values if v and v != '0']
+                    
+                    if not display_values:
+                        continue
+
+                    value_str = ", ".join(display_values)
+
+                    # Handle Pair with Previous
+                    if ptal.attribute_id.pair_with_previous and attribute_lines:
+                        # Append to last line
+                        attribute_lines[-1] += f" {value_str}"
+                    else:
+                        # New line
+                        attribute_lines.append(f"• {ptal.attribute_id.name}: {value_str}")
 
                 attribute_description = "\n".join(attribute_lines) if attribute_lines else ""
 
@@ -317,6 +349,8 @@ class ProductConfiguratorController(Controller):
                 attributes_summary_parts = []
                 for attr_value in attribute_values:
                     if attr_value.attribute_id.display_type == "file_upload":
+                        continue
+                    if attr_value.attribute_id.is_quantity:
                         continue
                     if not attr_value.is_custom:
                         if attr_value.attribute_id.display_type == "m2o":
@@ -341,36 +375,11 @@ class ProductConfiguratorController(Controller):
                     else base_name
                 )
 
-                # Detailed attribute summary (SKIP file_upload)
-                attribute_summary_parts = []
-                for attr_value in attribute_values:
-                    if attr_value.attribute_id.display_type == "file_upload":
-                        continue
-                    if not attr_value.is_custom:
-                        if attr_value.attribute_id.display_type == "m2o" and attr_value.m2o_res_id:
-                            rec = request.env[
-                                attr_value.attribute_id.m2o_model_id.model
-                            ].sudo().browse(attr_value.m2o_res_id)
-                            attribute_summary_parts.append(
-                                f"{attr_value.attribute_id.name}: {rec.display_name}"
-                            )
-                        else:
-                            attribute_summary_parts.append(
-                                f"{attr_value.attribute_id.name}: {attr_value.name}"
-                            )
-
-                for custom_val in custom_attribute_values:
-                    ptav_id = custom_val.get('ptav_id')
-                    custom_value = custom_val.get('custom_value', '')
-                    if ptav_id and custom_value:
-                        ptav = request.env['product.template.attribute.value'].sudo().browse(
-                            int(ptav_id)
-                        )
-                        if ptav.exists():
-                            attribute_summary_parts.append(
-                                f"{ptav.attribute_id.name}: {custom_value}"
-                            )
-
+                # =========================
+                # BUILD ATTRIBUTE SUMMARY (Reuse logic)
+                # =========================
+                # Strip "• " from lines to get "Name: Value" format
+                attribute_summary_parts = [line.replace("• ", "", 1) for line in attribute_lines]
                 attribute_summary = ", ".join(attribute_summary_parts)
 
                 # =========================

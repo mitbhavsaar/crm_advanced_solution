@@ -23,7 +23,7 @@ class SaleOrderSpreadsheet(models.Model):
     _description = 'Sales Order Spreadsheet'
 
     name = fields.Char(required=True)
-    order_id = fields.Many2one('sale.order', string="Sales Order", ondelete='cascade')
+    order_id = fields.Many2one('sale.order', ondelete='set null')
     company_id = fields.Many2one('res.company', default=lambda self: self.env.company)
     raw_spreadsheet_data = fields.Text("Raw Spreadsheet Data")
 

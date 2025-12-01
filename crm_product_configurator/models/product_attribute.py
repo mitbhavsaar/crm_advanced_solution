@@ -7,10 +7,12 @@ class ProductAttribute(models.Model):
         selection_add=[
             ('file_upload', 'File Upload'),
             ('m2o', 'Many2one Selector'),
+            ('strictly_numeric', 'Strictly Numeric'),
         ],
         ondelete={
             'file_upload': 'set default',
             'm2o': 'set default',
+            'strictly_numeric': 'set default',
         }
     )
 
@@ -19,4 +21,16 @@ class ProductAttribute(models.Model):
         "ir.model",
         string="Many2one Model",
         help="Select the model whose records will be selectable as values."
+    )
+    
+    pair_with_previous = fields.Boolean(
+    string="Pair with Previous",
+    help="Pair this attribute with the previous one on the same line without label."
+    )
+
+    is_width_check = fields.Boolean( string = "Check Width")
+    
+    is_quantity = fields.Boolean(
+        string="Is Quantity",
+        help="If checked, the value of this attribute will be used as the quantity for the CRM Line."
     )
